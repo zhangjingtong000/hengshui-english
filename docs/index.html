@@ -42,20 +42,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .back:active{opacity:.6}
 /* hint */
 .hint{text-align:center;font-size:12px;color:var(--gray);margin-bottom:16px}
-/* install bar */
-.install-bar{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;padding:12px;font-size:15px;cursor:pointer;position:sticky;top:0;z-index:10}
-.install-bar:active{opacity:.85}
-.install-icon{font-size:20px}
-.install-text{font-weight:600}
-.install-note{text-align:center;font-size:12px;color:var(--gray);padding:4px 0;display:none}
 </style>
 </head>
 <body>
-
-<div id="install-bar" class="install-bar" onclick="installApp()">
-  <span class="install-icon">📱</span>
-  <span class="install-text">添加到桌面，像 App 一样用</span>
-</div>
 
 <!-- Units page -->
 <div id="page-units" class="page active">
@@ -214,29 +203,6 @@ async function playWord(unitId, idx) {
 
   if (row) row.classList.remove('playing')
   if (playingRow === row) playingRow = null
-}
-
-// ========== PWA 安装 ==========
-let deferredPrompt = null
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault()
-  deferredPrompt = e
-})
-
-function installApp() {
-  if (deferredPrompt) {
-    deferredPrompt.prompt()
-    deferredPrompt.userChoice.then(() => { deferredPrompt = null })
-  } else {
-    // 根据系统给出指引
-    const ua = navigator.userAgent
-    if (/iPhone|iPad|iPod/.test(ua)) {
-      alert('Safari 底部点「分享」→ 「添加到主屏幕」')
-    } else {
-      alert('浏览器菜单 → 「添加到主屏幕」')
-    }
-  }
 }
 
 // Service Worker (离线缓存) — 部署到服务器时启用
