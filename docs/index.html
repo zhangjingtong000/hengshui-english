@@ -42,14 +42,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .back:active{opacity:.6}
 /* hint */
 .hint{text-align:center;font-size:12px;color:var(--gray);margin-bottom:16px}
-/* install banner */
-.install-banner{display:none;background:var(--blue);color:#fff;text-align:center;padding:12px;font-size:14px;cursor:pointer;position:sticky;top:0;z-index:10}
-.install-banner.show{display:block}
+/* install bar */
+.install-bar{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;padding:12px;font-size:15px;cursor:pointer;position:sticky;top:0;z-index:10}
+.install-bar:active{opacity:.85}
+.install-icon{font-size:20px}
+.install-text{font-weight:600}
+.install-note{text-align:center;font-size:12px;color:var(--gray);padding:4px 0;display:none}
 </style>
 </head>
 <body>
 
-<div id="banner" class="install-banner" onclick="install()">点这里 添加到桌面，学英语更方便</div>
+<div id="install-bar" class="install-bar" onclick="installApp()">
+  <span class="install-icon">📱</span>
+  <span class="install-text">添加到桌面，像 App 一样用</span>
+</div>
 
 <!-- Units page -->
 <div id="page-units" class="page active">
@@ -211,23 +217,25 @@ async function playWord(unitId, idx) {
 }
 
 // ========== PWA 安装 ==========
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  $('banner').classList.add('show');
-});
+let deferredPrompt = null
 
-function install() {
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault()
+  deferredPrompt = e
+})
+
+function installApp() {
   if (deferredPrompt) {
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(() => {
-      $('banner').classList.remove('show');
-    });
+    deferredPrompt.prompt()
+    deferredPrompt.userChoice.then(() => { deferredPrompt = null })
   } else {
-    // Fallback: show instructions
-    alert('iPhone: 点浏览器底部分享按钮 → "添加到主屏幕"\nAndroid: 点浏览器菜单 → "添加到主屏幕"');
-    $('banner').classList.remove('show');
+    // 根据系统给出指引
+    const ua = navigator.userAgent
+    if (/iPhone|iPad|iPod/.test(ua)) {
+      alert('Safari 底部点「分享」→ 「添加到主屏幕」')
+    } else {
+      alert('浏览器菜单 → 「添加到主屏幕」')
+    }
   }
 }
 
