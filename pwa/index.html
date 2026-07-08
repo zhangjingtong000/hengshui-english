@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1E3A5F">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='90'>🔤</text></svg>">
+<title>衡水体英语</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{--blue:#1E3A5F;--gray:#94A3B8;--bg:#F5F7FA;--card:#fff;--red:#EF4444}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);-webkit-tap-highlight-color:transparent;user-select:none}
+.page{display:none;padding:16px;min-height:100vh;min-height:100dvh}
+.page.active{display:block}
+/* header */
+.header{text-align:center;padding:32px 0 20px}
+.title{font-size:28px;font-weight:800;color:var(--blue);letter-spacing:1px}
+.sub{font-size:14px;color:var(--gray);margin-top:4px}
+/* unit cards */
+.cards{display:flex;flex-direction:column;gap:12px;max-width:480px;margin:0 auto}
+.card{display:flex;align-items:center;background:var(--card);border-radius:14px;padding:22px 18px;box-shadow:0 1px 6px rgba(0,0,0,.05);cursor:pointer;transition:transform .1s}
+.card:active{transform:scale(.98);background:#EBF5FB}
+.card-name{flex:1;font-size:19px;font-weight:700;color:var(--blue)}
+.card-count{font-size:13px;color:var(--gray);margin-right:8px}
+.card-arrow{font-size:24px;color:#CBD5E1}
+/* word rows */
+.word-list{display:flex;flex-direction:column;gap:10px;max-width:480px;margin:0 auto}
+.word-row{display:flex;align-items:center;background:var(--card);border-radius:12px;padding:20px 16px;box-shadow:0 1px 4px rgba(0,0,0,.03);cursor:pointer}
+.word-row:active{background:#EBF5FB}
+.word-row.playing{background:#DBEAFE;box-shadow:0 0 0 2px #3B82F6 inset}
+.word-info{flex:1;min-width:0}
+.word-text{font-size:22px;font-weight:700;color:#1A1A2E;word-break:break-all}
+.word-trans{font-size:13px;color:#64748B;margin-top:3px}
+.spk{width:52px;height:52px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.spk-icon{font-size:32px;transition:transform .15s}
+/* back button */
+.back{display:inline-flex;align-items:center;gap:4px;font-size:15px;color:var(--blue);cursor:pointer;padding:8px 0;margin-bottom:8px}
+.back:active{opacity:.6}
+/* hint */
+.hint{text-align:center;font-size:12px;color:var(--gray);margin-bottom:16px}
+/* install banner */
+.install-banner{display:none;background:var(--blue);color:#fff;text-align:center;padding:12px;font-size:14px;cursor:pointer;position:sticky;top:0;z-index:10}
+.install-banner.show{display:block}
+</style>
+</head>
+<body>
+
+<div id="banner" class="install-banner" onclick="install()">点这里 添加到桌面，学英语更方便</div>
+
+<!-- Units page -->
+<div id="page-units" class="page active">
+  <div class="header">
+    <div class="title">衡水体英语</div>
+    <div class="sub">译林版 · 三年级上册</div>
+  </div>
+  <div class="cards" id="unit-list"></div>
+</div>
+
+<!-- Words page -->
+<div id="page-words" class="page">
+  <div class="back" onclick="showUnits()">‹ 返回</div>
+  <div class="hint">点一下听发音</div>
+  <div class="word-list" id="word-list"></div>
+</div>
+
+<script>
+// ========== 音频管理器 — 有道词典 TTS（真人发音质量）==========
+const AudioCtrl = (() => {
+  let currentAudio = null
+  let currentPlayId = 0
+
+  function stop() {
+    currentPlayId++
+    if (currentAudio) {
+      currentAudio.pause()
+      currentAudio.currentTime = 0
+      currentAudio = null
+    }
+  }
+
+  // 有道 TTS：type=0 美音，type=1 英音
+  function ttsUrl(text, type = 0) {
+    return 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=' + type
+  }
+
+  function playUrl(url) {
+    stop()
+    const pid = ++currentPlayId
+    return new Promise(resolve => {
+      const audio = new Audio(url)
+      currentAudio = audio
+      audio.onended = () => { if (currentPlayId === pid) { currentAudio = null; resolve() } }
+      audio.onerror = () => { if (currentPlayId === pid) { currentAudio = null; resolve() } }
+      audio.play().catch(() => resolve())
+    })
+  }
+
+  async function readWord(word) {
+    await playUrl(ttsUrl(word, 0))
+  }
+
+  return { readWord, stop }
+})()
+
+// ========== 单词数据 ==========
+const UNITS = [
+  {id:'letters',name:'英文字母',words:(()=>{let a=[];for(let i=65;i<=90;i++)a.push({t:String.fromCharCode(i)+String.fromCharCode(i+32),c:''});return a})()},
+  {id:1,name:'Unit 1',words:[
+    {t:'hello',c:'哈啰，你好'},{t:'hi',c:'喂，嗨'},{t:'Good morning.',c:'早上好。'},{t:'I',c:'我'},{t:'am',c:'是'},{t:'ah',c:'啊'},{t:'a',c:'一（个）'},{t:'cat',c:'猫'},{t:'Miss',c:'小姐，女士'},{t:'Good afternoon.',c:'下午好。'},{t:'class',c:'同学们'},{t:'goodbye',c:'再见，再会'},{t:'bye',c:'再见，再会'}
+  ]},
+  {id:2,name:'Unit 2',words:[
+    {t:'what',c:'什么'},{t:'is',c:'是'},{t:'your',c:'你的，你们的'},{t:'name',c:'名字'},{t:'my',c:'我的'},{t:'Nice to meet you!',c:'很高兴认识你！'},{t:'too',c:'也'},{t:'boy',c:'男孩'},{t:'and',c:'和，与'},{t:'girl',c:'女孩'},{t:'Mr',c:'先生'}
+  ]},
+  {id:3,name:'Unit 3',words:[
+    {t:'are',c:'是'},{t:'you',c:'你，你们'},{t:'no',c:'不，不是'},{t:'not',c:'不，没有'},{t:'yes',c:'是，对'},{t:'ha',c:'（笑声）哈'},{t:'Here I am!',c:'我在这里！'},{t:'but',c:'但是'},{t:'oh',c:'啊，哦'},{t:'sorry',c:'对不起'},{t:'twin',c:'双胞胎之一'},{t:'we',c:'我们'},{t:'excuse me',c:'对不起'},{t:'class',c:'班级'},{t:'in',c:'在……内，在……中'},{t:'with',c:'和，同'},{t:'right',c:'正确的'}
+  ]},
+  {id:4,name:'Unit 4',words:[
+    {t:'this',c:'这，这个'},{t:'friend',c:'朋友'},{t:'she',c:'她'},{t:'he',c:'他'},{t:'it',c:'它'},{t:'good',c:'好的'},{t:'Thank you.',c:'谢谢你。'},{t:'have',c:'有，持有'},{t:'many',c:'许多'}
+  ]},
+  {id:5,name:'Unit 5',words:[
+    {t:'mother',c:'母亲，妈妈'},{t:'father',c:'父亲，爸爸'},{t:'dad',c:'爸爸'},{t:'mum',c:'妈妈'},{t:'mom',c:'妈妈'},{t:'brother',c:'哥哥、弟弟'},{t:'baby',c:'婴儿'},{t:'sister',c:'姐姐、妹妹'},{t:'Good evening.',c:'晚上好。'},{t:'quick',c:'快、快点'},{t:'look',c:'看、瞧'},{t:'the',c:'这个，这些，那个，那些'},{t:'pond',c:'池塘、水池'},{t:'who',c:'谁、什么人'},{t:'great',c:'极好的、好棒的'},{t:'come',c:'来'},{t:'meet',c:'相识，结识，被引见介绍（给某人）'},{t:'family',c:'家、家庭'},{t:'say',c:'说'}
+  ]},
+  {id:6,name:'Unit 6',words:[
+    {t:'grandfather',c:'祖父，外祖父'},{t:'grandpa',c:'祖父，外祖父'},{t:'uncle',c:'舅父，叔父，伯父，姑父，姨父'},{t:'aunt',c:'舅母，婶母，伯母，姑母，姨母'},{t:'grandmother',c:'祖母，外祖母'},{t:'grandma',c:'祖母，外祖母'},{t:'cousin',c:'堂兄（弟），堂姐（妹），表兄（弟），表姐（妹）'},{t:'cool',c:'妙极的，酷的'},{t:'me',c:'我'},{t:'wow',c:'哇，呀'},{t:'big',c:'大的'},{t:'it',c:'指婴儿，尤指性别不详者'},{t:'happy',c:'幸福的'},{t:'love',c:'爱，热爱'}
+  ]},
+  {id:7,name:'Unit 7',words:[
+    {t:'Happy Birthday!',c:'生日快乐！'},{t:'one',c:'一'},{t:'two',c:'二'},{t:'three',c:'三'},{t:'four',c:'四'},{t:'five',c:'五'},{t:'six',c:'六'},{t:'seven',c:'七'},{t:'eight',c:'八'},{t:'nine',c:'九'},{t:'ten',c:'十'},{t:'now',c:'现在，此刻'},{t:'want',c:'要，想要'},{t:'car',c:'小汽车，轿车'},{t:'book',c:'书'},{t:'ball',c:'球'},{t:'cake',c:'蛋糕，糕饼'},{t:'How lovely!',c:'真可爱！'},{t:'Can I help you?',c:'要帮忙吗？'},{t:'Yes, please.',c:'好的，谢谢。'},{t:'some',c:'一些'},{t:'toy',c:'玩具'},{t:'for',c:'给，对，供'},{t:'OK',c:'对，好，行'},{t:'How old are you?',c:'你多大了？'},{t:'please',c:'请'},{t:'here',c:'到这里，在这里'},{t:'love',c:'喜好，喜爱'},{t:'Here you are.',c:'给你。'},{t:"You're welcome.",c:'别客气。不用谢。'},{t:'thanks',c:'谢谢'}
+  ]},
+  {id:8,name:'Unit 8',words:[
+    {t:'can',c:'能，会'},{t:'do',c:'做，干，办（某事）'},{t:'for',c:'为了'},{t:'clean',c:'使……干净，打扫'},{t:'table',c:'桌子'},{t:'draw',c:'画，描画'},{t:'sing',c:'唱（歌），演唱'},{t:'take pictures',c:'拍照'},{t:'dance',c:'跳舞'},{t:'Are you OK?',c:'你没事吧？'},{t:'dizzy',c:'头晕目眩的、眩晕的'},{t:'picture',c:'图画、绘画；照片'},{t:'er',c:'哦，嗯'},{t:'fox',c:'狐狸'},{t:'child',c:'儿童，小孩'},{t:'children',c:'儿童，小孩（复数）'},{t:'thing',c:'事情'}
+  ]}
+];
+
+// ========== UI 渲染 ==========
+const $ = id => document.getElementById(id);
+let currentUnit = null;
+
+function showUnits() {
+  $('page-words').classList.remove('active');
+  $('page-units').classList.add('active');
+  currentUnit = null;
+}
+
+function buildUnitList() {
+  const list = $('unit-list');
+  list.innerHTML = UNITS.map(u => `
+    <div class="card" onclick="openUnit('${u.id}')">
+      <div class="card-name">${u.name}</div>
+      <div class="card-count">${u.words.length} 个词</div>
+      <div class="card-arrow">›</div>
+    </div>
+  `).join('');
+  // Pre-build word lists
+  UNITS.forEach(u => buildWordList(u));
+}
+
+function buildWordList(unit) {
+  const el = document.createElement('div');
+  el.id = 'words-' + unit.id;
+  el.innerHTML = unit.words.map((w, i) => `
+    <div class="word-row" data-unit="${unit.id}" data-idx="${i}"
+         onclick="playWord('${unit.id}',${i})">
+      <div class="word-info">
+        <div class="word-text">${w.t}</div>
+        ${w.c ? `<div class="word-trans">${w.c}</div>` : ''}
+      </div>
+      <div class="spk">
+        <span class="spk-icon">🔊</span>
+      </div>
+    </div>
+  `).join('');
+  el.style.display = 'none';
+  $('word-list').appendChild(el);
+}
+
+function openUnit(unitId) {
+  currentUnit = unitId;
+  $('page-units').classList.remove('active');
+  $('page-words').classList.add('active');
+  // Hide all, show target
+  UNITS.forEach(u => {
+    const el = document.getElementById('words-' + u.id);
+    if (el) el.style.display = u.id == unitId ? '' : 'none';
+  });
+}
+
+let playingRow = null
+
+async function playWord(unitId, idx) {
+  const unit = UNITS.find(u => u.id == unitId)
+  if (!unit) return
+  const word = unit.words[idx]
+  if (!word) return
+
+  const text = unit.id === 'letters' ? word.t[0] : word.t
+  const row = document.querySelector(`.word-row[data-unit="${unitId}"][data-idx="${idx}"]`)
+
+  // 移除上一个高亮
+  if (playingRow) playingRow.classList.remove('playing')
+  playingRow = row
+  if (row) row.classList.add('playing')
+
+  await AudioCtrl.readWord(text)
+
+  if (row) row.classList.remove('playing')
+  if (playingRow === row) playingRow = null
+}
+
+// ========== PWA 安装 ==========
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  $('banner').classList.add('show');
+});
+
+function install() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      $('banner').classList.remove('show');
+    });
+  } else {
+    // Fallback: show instructions
+    alert('iPhone: 点浏览器底部分享按钮 → "添加到主屏幕"\nAndroid: 点浏览器菜单 → "添加到主屏幕"');
+    $('banner').classList.remove('show');
+  }
+}
+
+// Service Worker (离线缓存) — 部署到服务器时启用
+// if ('serviceWorker' in navigator) {
+//   navigator.serviceWorker.register('./sw.js').catch(() => {})
+// }
+
+// ========== 启动 ==========
+buildUnitList();
+</script>
+</body>
+</html>

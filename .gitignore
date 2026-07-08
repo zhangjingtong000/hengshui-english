@@ -1,0 +1,9 @@
+*.pyc
+__pycache__/
+*.pdf
+_phonics/
+_ref/
+miniapp/
+*.ttf
+*.jpg
+.claude/

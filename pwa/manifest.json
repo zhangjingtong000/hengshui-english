@@ -1,0 +1,15 @@
+{
+  "name": "衡水体英语",
+  "short_name": "衡水英语",
+  "description": "译林版三年级上册单词拼读",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F5F7FA",
+  "theme_color": "#1E3A5F",
+  "icons": [{
+    "src": "icon.svg",
+    "sizes": "512x512",
+    "type": "image/svg+xml",
+    "purpose": "any maskable"
+  }]
+}
