@@ -116,17 +116,23 @@ const AudioCtrl = (() => {
       u.lang = 'en-US'; u.rate = 0.75; u.volume = 1
       if (letterVoice) u.voice = letterVoice
       u.onend = () => { if (currentPlayId === pid) resolve() }
-      u.onerror = () => { if (currentPlayId === pid) resolve() }
+      u.onerror = () => { resolve() }  // 被取消也要 resolve，否则 loop 卡死
       speechSynthesis.speak(u)
     })
   }
 
+  let spellId = 0
+
   async function spellWord(word) {
+    stop()  // 取消之前的音频和语音
     speechSynthesis.cancel()
+    const sid = ++spellId
     const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
     for (const ch of letters) {
+      if (sid !== spellId) return  // 被打断了，停止
       await speakLetter(ch)
     }
+    if (sid !== spellId) return
     await playUrl(ttsUrl(word, 0))
   }
 
