@@ -112,12 +112,13 @@ const AudioCtrl = (() => {
   let spellId = 0
 
   async function spellWord(word) {
-    stop()  // 取消之前的音频和语音
+    stop()
     speechSynthesis.cancel()
+    await new Promise(r => setTimeout(r, 60))  // 等 cancel 完全生效，避免第一个字母被截断
     const sid = ++spellId
     const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
     for (const ch of letters) {
-      if (sid !== spellId) return  // 被打断了，停止
+      if (sid !== spellId) return
       await speakLetter(ch)
     }
     if (sid !== spellId) return
