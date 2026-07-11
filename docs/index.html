@@ -252,6 +252,8 @@ function cancelTap() {
   if (tapTimer) { clearTimeout(tapTimer); tapTimer = null }
 }
 
+let playToken = 0
+
 async function playWord(unitId, idx, mode) {
   const unit = UNITS.find(u => u.id == unitId)
   if (!unit) return
@@ -260,8 +262,10 @@ async function playWord(unitId, idx, mode) {
 
   const text = unit.id === 'letters' ? word.t[0] : word.t
   const row = document.querySelector(`.word-row[data-unit="${unitId}"][data-idx="${idx}"]`)
+  const token = ++playToken
 
-  if (playingRow) playingRow.classList.remove('playing')
+  // 切换高亮
+  if (playingRow && playingRow !== row) playingRow.classList.remove('playing')
   playingRow = row
   if (row) row.classList.add('playing')
 
@@ -271,8 +275,11 @@ async function playWord(unitId, idx, mode) {
     await AudioCtrl.readWord(text)
   }
 
-  if (row) row.classList.remove('playing')
-  if (playingRow === row) playingRow = null
+  // 只有当前会话才清除高亮，防止旧会话误删
+  if (token === playToken && row) {
+    row.classList.remove('playing')
+    if (playingRow === row) playingRow = null
+  }
 }
 
 // Service Worker (离线缓存) — 部署到服务器时启用
