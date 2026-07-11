@@ -80,6 +80,8 @@ const AudioCtrl = (() => {
       currentAudio.currentTime = 0
       currentAudio = null
     }
+    letterAudio.pause()
+    letterAudio.currentTime = 0
   }
 
   function ttsUrl(text, type = 0) {
@@ -105,16 +107,29 @@ const AudioCtrl = (() => {
 
   let spellId = 0
 
+  // 手机自动播放限制：复用同一个 Audio 元素
+  const letterAudio = new Audio()
+  // G 和 P 是有道返回的 WAV 格式，其余是 MP3
+  const letterExt = {G:'wav',P:'wav'}
+  letterAudio.preload = 'auto'
+
   async function spellWord(word) {
     stop()
     const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
     const sid = ++spellId
 
-    // 字母用本地预录音频，任何设备一致、零延迟
     for (const ch of letters) {
       if (sid !== spellId) return
-      await playUrl('audio/' + ch + '.mp3')
+      const ext = letterExt[ch] || 'mp3'
+      await new Promise(resolve => {
+        letterAudio.src = 'audio/' + ch + '.' + ext
+        currentAudio = letterAudio
+        letterAudio.onended = () => resolve()
+        letterAudio.onerror = () => resolve()
+        letterAudio.play().catch(() => resolve())
+      })
     }
+    currentAudio = null
     if (sid !== spellId) return
     await playUrl(ttsUrl(word, 0))
   }
