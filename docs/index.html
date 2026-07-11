@@ -43,15 +43,10 @@ body{font-family:Arial,Helvetica,-apple-system,BlinkMacSystemFont,'Segoe UI',san
 /* hint */
 .hint{text-align:center;font-size:12px;color:var(--gray);margin-bottom:16px}
 /* flashcard */
-.fc-body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh}
-.fc-letter{font-size:140px;font-weight:800;color:var(--blue);cursor:pointer;user-select:none;line-height:1;transition:transform .1s;font-family:Arial,Helvetica,sans-serif}
-.fc-letter:active{transform:scale(.92)}
-.fc-case{font-size:22px;color:var(--gray);margin-top:8px;font-family:Arial,Helvetica,sans-serif}
-.fc-hint{font-size:14px;color:var(--gray);margin-top:24px}
-.fc-nav{display:flex;gap:20px;margin-top:32px;align-items:center}
-.fc-btn{width:56px;height:56px;border-radius:50%;border:2px solid var(--blue);background:#fff;font-size:24px;color:var(--blue);cursor:pointer;display:flex;align-items:center;justify-content:center}
-.fc-btn:active{background:#EBF5FB}
-.fc-shuffle{font-size:13px;color:var(--blue);cursor:pointer;padding:8px 16px;border:1px solid var(--blue);border-radius:20px;margin-top:20px}
+.fc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;max-width:480px;margin:0 auto;padding:0 16px}
+.fc-cell{background:#fff;border-radius:12px;padding:20px 0;text-align:center;cursor:pointer;font-size:42px;font-weight:800;color:var(--blue);font-family:Arial,Helvetica,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.fc-cell:active{background:#DBEAFE;transform:scale(.95)}
+.fc-shuffle{font-size:13px;color:var(--blue);cursor:pointer;padding:8px 16px;border:1px solid var(--blue);border-radius:20px;display:inline-block}
 .fc-shuffle:active{background:#EBF5FB}
 </style>
 </head>
@@ -60,15 +55,10 @@ body{font-family:Arial,Helvetica,-apple-system,BlinkMacSystemFont,'Segoe UI',san
 <!-- Flashcard page -->
 <div id="page-fc" class="page">
   <div class="back" onclick="showUnits()">‹ 返回</div>
-  <div class="fc-body">
-    <div class="fc-letter" id="fc-letter" onclick="fcTap()">A</div>
-    <div class="fc-case" id="fc-case">大写</div>
-    <div class="fc-nav">
-      <div class="fc-btn" onclick="fcPrev()">‹</div>
-      <div class="fc-btn" onclick="fcNext()">›</div>
-    </div>
-    <div class="fc-shuffle" onclick="fcShuffle()">🔀 随机打乱</div>
-    <div class="fc-hint">点字母听发音</div>
+  <div class="hint">点字母听发音</div>
+  <div class="fc-grid" id="fc-grid"></div>
+  <div style="text-align:center;margin-top:16px">
+    <span class="fc-shuffle" onclick="fcShuffle()">🔀 刷新排序</span>
   </div>
 </div>
 
@@ -247,7 +237,6 @@ async function playWord(unitId, idx) {
 // }
 
 // ========== 字母闪卡 ==========
-let fcIndex = 0
 let fcOrder = []
 function fcInit() {
   fcOrder = Array.from({length:26}, (_,i) => i)
@@ -258,27 +247,14 @@ function fcShuffle() {
     const j = Math.floor(Math.random() * (i + 1));
     [fcOrder[i], fcOrder[j]] = [fcOrder[j], fcOrder[i]]
   }
-  fcIndex = 0
-  fcShow()
+  fcRender()
 }
-function fcShow() {
-  const i = fcOrder[fcIndex]
-  const upper = String.fromCharCode(65 + i)
-  const lower = String.fromCharCode(97 + i)
-  $('fc-letter').textContent = upper
-  $('fc-case').textContent = upper + lower + '  ·  大写'
-}
-function fcNext() {
-  fcIndex = (fcIndex + 1) % 26
-  fcShow()
-}
-function fcPrev() {
-  fcIndex = (fcIndex - 1 + 26) % 26
-  fcShow()
-}
-function fcTap() {
-  const ch = $('fc-letter').textContent
-  AudioCtrl.readWord(ch)
+function fcRender() {
+  const grid = $('fc-grid')
+  grid.innerHTML = fcOrder.map(i => {
+    const ch = String.fromCharCode(65 + i)
+    return '<div class="fc-cell" onclick="AudioCtrl.readWord(\'' + ch + '\')">' + ch + '</div>'
+  }).join('')
 }
 function openFlashcard() {
   $('page-units').classList.remove('active')
