@@ -80,8 +80,7 @@ const AudioCtrl = (() => {
       currentAudio.currentTime = 0
       currentAudio = null
     }
-    letterAudio.pause()
-    letterAudio.currentTime = 0
+    if (letterAudio) { letterAudio.pause(); letterAudio.currentTime = 0 }
   }
 
   function ttsUrl(text, type = 0) {
@@ -107,26 +106,35 @@ const AudioCtrl = (() => {
 
   let spellId = 0
 
-  // 手机自动播放限制：复用同一个 Audio 元素
-  const letterAudio = new Audio()
   // G 和 P 是有道返回的 WAV 格式，其余是 MP3
   const letterExt = {G:'wav',P:'wav'}
-  letterAudio.preload = 'auto'
+  // 移动端需要在用户手势期间创建 Audio 才能播，用懒初始化
+  let letterAudio = null
+  function ensureLetterAudio() {
+    if (!letterAudio) {
+      letterAudio = document.createElement('audio')
+      letterAudio.setAttribute('playsinline', '')
+      letterAudio.preload = 'auto'
+    }
+    return letterAudio
+  }
 
   async function spellWord(word) {
     stop()
     const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
     const sid = ++spellId
+    const audio = ensureLetterAudio()
 
     for (const ch of letters) {
       if (sid !== spellId) return
       const ext = letterExt[ch] || 'mp3'
       await new Promise(resolve => {
-        letterAudio.src = 'audio/' + ch + '.' + ext
-        currentAudio = letterAudio
-        letterAudio.onended = () => resolve()
-        letterAudio.onerror = () => resolve()
-        letterAudio.play().catch(() => resolve())
+        audio.src = 'audio/' + ch + '.' + ext
+        currentAudio = audio
+        audio.onended = () => resolve()
+        audio.onerror = () => resolve()
+        audio.load()
+        audio.play().then(() => {}).catch(() => resolve())
       })
     }
     currentAudio = null
@@ -234,6 +242,10 @@ let tapFired = false
 function onDown(e, unitId, idx) {
   tapFired = false
   cancelTap()
+  // 在用户手势内激活音频引擎（移动端必须）
+  const a = ensureLetterAudio()
+  a.src = 'audio/A.mp3'; a.load()
+  a.play().then(() => { a.pause(); a.currentTime = 0 }).catch(() => {})
   tapTimer = setTimeout(() => {
     tapFired = true
     playWord(unitId, idx, 'spell')
