@@ -58,12 +58,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <!-- Words page -->
 <div id="page-words" class="page">
   <div class="back" onclick="showUnits()">‹ 返回</div>
-  <div class="hint">点一下听发音</div>
+  <div class="hint" id="word-hint">点一下听发音 · 长按听拼读</div>
   <div class="word-list" id="word-list"></div>
 </div>
 
 <script>
-// ========== 音频管理器 — 有道词典 TTS（真人发音质量）==========
+// ========== 音频管理器 — 有道词典 TTS（真人发音）==========
 const AudioCtrl = (() => {
   let currentAudio = null
   let currentPlayId = 0
@@ -77,10 +77,24 @@ const AudioCtrl = (() => {
     }
   }
 
-  // 有道 TTS：type=0 美音，type=1 英音
+  // 有道 TTS：type=0 美音
   function ttsUrl(text, type = 0) {
     return 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=' + type
   }
+
+  // 预缓存 26 个字母的音频（首次加载后秒播）
+  const letterCache = {}
+  function preloadLetters() {
+    for (let i = 65; i <= 90; i++) {
+      const ch = String.fromCharCode(i)
+      const url = ttsUrl(ch, 0)
+      const audio = new Audio(url)
+      audio.preload = 'auto'
+      audio.load()
+      letterCache[ch] = url
+    }
+  }
+  preloadLetters()
 
   function playUrl(url) {
     stop()
@@ -98,7 +112,15 @@ const AudioCtrl = (() => {
     await playUrl(ttsUrl(word, 0))
   }
 
-  return { readWord, stop }
+  async function spellWord(word) {
+    const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
+    for (const ch of letters) {
+      await playUrl(letterCache[ch] || ttsUrl(ch, 0))
+    }
+    await playUrl(ttsUrl(word, 0))
+  }
+
+  return { readWord, spellWord, stop }
 })()
 
 // ========== 单词数据 ==========
@@ -158,7 +180,11 @@ function buildWordList(unit) {
   el.id = 'words-' + unit.id;
   el.innerHTML = unit.words.map((w, i) => `
     <div class="word-row" data-unit="${unit.id}" data-idx="${i}"
-         onclick="playWord('${unit.id}',${i})">
+         ontouchstart="onDown(event,'${unit.id}',${i})"
+         ontouchend="onUp(event,'${unit.id}',${i})"
+         ontouchmove="cancelTap()"
+         onmousedown="onDown(event,'${unit.id}',${i})"
+         onmouseup="onUp(event,'${unit.id}',${i})">
       <div class="word-info">
         <div class="word-text">${w.t}</div>
         ${w.c ? `<div class="word-trans">${w.c}</div>` : ''}
@@ -181,11 +207,35 @@ function openUnit(unitId) {
     const el = document.getElementById('words-' + u.id);
     if (el) el.style.display = u.id == unitId ? '' : 'none';
   });
+  const unit = UNITS.find(u => u.id == unitId)
+  $('word-hint').textContent = unit && unit.id === 'letters'
+    ? '点一下听发音'
+    : '点一下听发音 · 长按听拼读'
 }
 
 let playingRow = null
+let tapTimer = null
+let tapFired = false
 
-async function playWord(unitId, idx) {
+function onDown(e, unitId, idx) {
+  tapFired = false
+  cancelTap()
+  tapTimer = setTimeout(() => {
+    tapFired = true
+    playWord(unitId, idx, 'spell')
+  }, 500)
+}
+
+function onUp(e, unitId, idx) {
+  cancelTap()
+  if (!tapFired) playWord(unitId, idx, 'read')
+}
+
+function cancelTap() {
+  if (tapTimer) { clearTimeout(tapTimer); tapTimer = null }
+}
+
+async function playWord(unitId, idx, mode) {
   const unit = UNITS.find(u => u.id == unitId)
   if (!unit) return
   const word = unit.words[idx]
@@ -194,12 +244,15 @@ async function playWord(unitId, idx) {
   const text = unit.id === 'letters' ? word.t[0] : word.t
   const row = document.querySelector(`.word-row[data-unit="${unitId}"][data-idx="${idx}"]`)
 
-  // 移除上一个高亮
   if (playingRow) playingRow.classList.remove('playing')
   playingRow = row
   if (row) row.classList.add('playing')
 
-  await AudioCtrl.readWord(text)
+  if (mode === 'spell') {
+    await AudioCtrl.spellWord(text)
+  } else {
+    await AudioCtrl.readWord(text)
+  }
 
   if (row) row.classList.remove('playing')
   if (playingRow === row) playingRow = null
