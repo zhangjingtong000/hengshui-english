@@ -116,15 +116,34 @@ const AudioCtrl = (() => {
 
   let spellId = 0
 
+  // 检测浏览器是否支持 Web Speech 拼读
+  let useWebSpeech = true
+  function checkSpeechSupport() {
+    const voices = speechSynthesis.getVoices()
+    const hasEn = voices.some(v => v.lang.startsWith('en'))
+    if (voices.length > 0 && !hasEn) useWebSpeech = false  // 有语音但无英语 → 降级
+  }
+  speechSynthesis.onvoiceschanged = checkSpeechSupport
+  setTimeout(checkSpeechSupport, 2000)
+
   async function spellWord(word) {
     stop()
-    speechSynthesis.cancel()
-    await new Promise(r => setTimeout(r, 60))  // 等 cancel 完全生效，避免第一个字母被截断
-    const sid = ++spellId
     const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
-    for (const ch of letters) {
-      if (sid !== spellId) return
-      await speakLetter(ch)
+    const sid = ++spellId
+
+    if (useWebSpeech) {
+      speechSynthesis.cancel()
+      await new Promise(r => setTimeout(r, 60))
+      for (const ch of letters) {
+        if (sid !== spellId) return
+        await speakLetter(ch)
+      }
+    } else {
+      // 手机降级：每个字母用有道单独请求
+      for (const ch of letters) {
+        if (sid !== spellId) return
+        await playUrl(ttsUrl(ch, 0))
+      }
     }
     if (sid !== spellId) return
     await playUrl(ttsUrl(word, 0))
