@@ -238,10 +238,15 @@ function openUnit(unitId) {
 let playingRow = null
 let tapTimer = null
 let tapFired = false
+let tapStartY = 0
+let tapStartX = 0
 
 function onDown(e, unitId, idx) {
   tapFired = false
   cancelTap()
+  // 记录起始坐标用于防误触
+  tapStartX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX
+  tapStartY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY
   // 在用户手势内激活音频引擎（移动端必须）
   const a = ensureLetterAudio()
   a.src = 'audio/A.mp3'; a.load()
@@ -254,6 +259,10 @@ function onDown(e, unitId, idx) {
 
 function onUp(e, unitId, idx) {
   cancelTap()
+  // 防误触：滑动超过 10px 不算点击
+  const endX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : e.clientX
+  const endY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY
+  if (Math.abs(endX - tapStartX) > 10 || Math.abs(endY - tapStartY) > 10) return
   if (!tapFired) playWord(unitId, idx, 'read')
 }
 
