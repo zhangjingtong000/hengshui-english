@@ -252,8 +252,9 @@ function fcShuffle() {
 function fcRender() {
   const grid = $('fc-grid')
   grid.innerHTML = fcOrder.map(i => {
-    const ch = String.fromCharCode(65 + i)
-    return '<div class="fc-cell" onclick="AudioCtrl.readWord(\'' + ch + '\')">' + ch + '</div>'
+    const upper = String.fromCharCode(65 + i)
+    const lower = String.fromCharCode(97 + i)
+    return '<div class="fc-cell" onclick="AudioCtrl.readWord(\'' + upper + '\')">' + upper + '<span style="font-size:24px;color:#94A3B8">' + lower + '</span></div>'
   }).join('')
 }
 function openFlashcard() {
