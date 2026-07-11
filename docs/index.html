@@ -114,12 +114,28 @@ const AudioCtrl = (() => {
     await playUrl(ttsUrl(word, 0))
   }
 
-  // 字母用 Web Speech，发音干净无语调
+  // 检测是否有英语语音（手机可能没有）
+  let hasEnVoice = null
+  function checkEnVoice() {
+    if (hasEnVoice !== null) return
+    const voices = speechSynthesis.getVoices()
+    hasEnVoice = voices.some(v => v.lang.startsWith('en'))
+  }
+  speechSynthesis.onvoiceschanged = checkEnVoice
+  setTimeout(checkEnVoice, 2000)
+
   function readLetter(ch) {
-    stop()
-    const u = new SpeechSynthesisUtterance(ch)
-    u.lang = 'en-US'; u.rate = 0.85; u.volume = 1
-    speechSynthesis.speak(u)
+    checkEnVoice()
+    if (hasEnVoice) {
+      // Web Speech：干脆利落
+      stop()
+      const u = new SpeechSynthesisUtterance(ch)
+      u.lang = 'en-US'; u.rate = 0.85; u.volume = 1
+      speechSynthesis.speak(u)
+    } else {
+      // 手机降级用有道
+      playUrl(ttsUrl(ch, 0))
+    }
   }
 
   return { readWord, readLetter, stop }
