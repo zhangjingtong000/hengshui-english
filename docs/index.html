@@ -125,17 +125,9 @@ const AudioCtrl = (() => {
   setTimeout(checkEnVoice, 2000)
 
   function readLetter(ch) {
-    checkEnVoice()
-    if (hasEnVoice) {
-      // Web Speech：干脆利落
-      stop()
-      const u = new SpeechSynthesisUtterance(ch)
-      u.lang = 'en-US'; u.rate = 0.85; u.volume = 1
-      speechSynthesis.speak(u)
-    } else {
-      // 手机降级用有道
-      playUrl(ttsUrl(ch, 0))
-    }
+    // 使用开源真人录制的字母音频，清晰干脆
+    stop()
+    playUrl('audio/' + ch + '.m4a')
   }
 
   return { readWord, readLetter, stop }
