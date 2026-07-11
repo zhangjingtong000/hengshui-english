@@ -289,11 +289,20 @@ async function playWord(unitId, idx, mode) {
 
 // ========== 启动 ==========
 buildUnitList()
-// 预热语音引擎，避免首次拼读卡顿
-setTimeout(() => {
-  const w = new SpeechSynthesisUtterance('')
-  w.volume = 0; speechSynthesis.speak(w)
-}, 500);
+// 预热语音引擎：voices 加载完成后立即无声播放一个字母
+function warmUpSpeech() {
+  const voices = speechSynthesis.getVoices()
+  if (voices.length === 0) return
+  const w = new SpeechSynthesisUtterance('A')
+  w.volume = 0.01; w.rate = 2
+  const en = voices.find(v => v.lang.startsWith('en'))
+  if (en) w.voice = en
+  speechSynthesis.speak(w)
+  setTimeout(() => speechSynthesis.cancel(), 100)
+}
+speechSynthesis.onvoiceschanged = warmUpSpeech
+// 兜底：2 秒后无论如何尝试一次
+setTimeout(warmUpSpeech, 2000);
 </script>
 </body>
 </html>
