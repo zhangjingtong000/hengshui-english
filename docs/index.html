@@ -98,26 +98,13 @@ const AudioCtrl = (() => {
     await playUrl(ttsUrl(word, 0))
   }
 
-  // 选一个固定的英语语音，确保所有字母音色统一
-  let letterVoice = null
-  function ensureVoice() {
-    if (letterVoice) return
-    const voices = speechSynthesis.getVoices()
-    letterVoice = voices.find(v => v.lang === 'en-US' && v.localService)
-               || voices.find(v => v.lang.startsWith('en'))
-  }
-  speechSynthesis.onvoiceschanged = ensureVoice
-  ensureVoice()
-
   function speakLetter(ch) {
-    ensureVoice()
     const pid = ++currentPlayId
     return new Promise(resolve => {
       const u = new SpeechSynthesisUtterance(ch)
       u.lang = 'en-US'; u.rate = 0.75; u.volume = 1
-      if (letterVoice) u.voice = letterVoice
       u.onend = () => { if (currentPlayId === pid) resolve() }
-      u.onerror = () => { resolve() }  // 被取消也要 resolve，否则 loop 卡死
+      u.onerror = () => { resolve() }
       speechSynthesis.speak(u)
     })
   }
@@ -289,20 +276,6 @@ async function playWord(unitId, idx, mode) {
 
 // ========== 启动 ==========
 buildUnitList()
-// 预热语音引擎：voices 加载完成后立即无声播放一个字母
-function warmUpSpeech() {
-  const voices = speechSynthesis.getVoices()
-  if (voices.length === 0) return
-  const w = new SpeechSynthesisUtterance('A')
-  w.volume = 0.01; w.rate = 2
-  const en = voices.find(v => v.lang.startsWith('en'))
-  if (en) w.voice = en
-  speechSynthesis.speak(w)
-  setTimeout(() => speechSynthesis.cancel(), 100)
-}
-speechSynthesis.onvoiceschanged = warmUpSpeech
-// 兜底：2 秒后无论如何尝试一次
-setTimeout(warmUpSpeech, 2000);
 </script>
 </body>
 </html>
