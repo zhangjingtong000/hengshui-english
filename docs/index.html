@@ -109,21 +109,20 @@ const AudioCtrl = (() => {
   ensureVoice()
 
   function speakLetter(ch) {
-    const synth = window.speechSynthesis
-    synth.cancel()
     ensureVoice()
     const pid = ++currentPlayId
     return new Promise(resolve => {
       const u = new SpeechSynthesisUtterance(ch)
-      u.lang = 'en-US'; u.rate = 0.85; u.volume = 1
+      u.lang = 'en-US'; u.rate = 0.75; u.volume = 1
       if (letterVoice) u.voice = letterVoice
       u.onend = () => { if (currentPlayId === pid) resolve() }
       u.onerror = () => { if (currentPlayId === pid) resolve() }
-      synth.speak(u)
+      speechSynthesis.speak(u)
     })
   }
 
   async function spellWord(word) {
+    speechSynthesis.cancel()
     const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
     for (const ch of letters) {
       await speakLetter(ch)
