@@ -114,7 +114,15 @@ const AudioCtrl = (() => {
     await playUrl(ttsUrl(word, 0))
   }
 
-  return { readWord, stop }
+  // 字母用 Web Speech，发音干净无语调
+  function readLetter(ch) {
+    stop()
+    const u = new SpeechSynthesisUtterance(ch)
+    u.lang = 'en-US'; u.rate = 0.85; u.volume = 1
+    speechSynthesis.speak(u)
+  }
+
+  return { readWord, readLetter, stop }
 })()
 
 // ========== 单词数据 ==========
@@ -254,7 +262,7 @@ function fcRender() {
   grid.innerHTML = fcOrder.map(i => {
     const upper = String.fromCharCode(65 + i)
     const lower = String.fromCharCode(97 + i)
-    return '<div class="fc-cell" onclick="AudioCtrl.readWord(\'' + upper + '\')">' + upper + '<span style="font-size:24px;color:#94A3B8">' + lower + '</span></div>'
+    return '<div class="fc-cell" onclick="AudioCtrl.readLetter(\'' + upper + '\')">' + upper + '<span style="font-size:24px;color:#94A3B8">' + lower + '</span></div>'
   }).join('')
 }
 function openFlashcard() {
