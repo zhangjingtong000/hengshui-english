@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <!-- Words page -->
 <div id="page-words" class="page">
   <div class="back" onclick="showUnits()">‹ 返回</div>
-  <div class="hint" id="word-hint">点一下听发音 · 长按听拼读</div>
+  <div class="hint">点一下听发音</div>
   <div class="word-list" id="word-list"></div>
 </div>
 
@@ -80,7 +80,6 @@ const AudioCtrl = (() => {
       currentAudio.currentTime = 0
       currentAudio = null
     }
-    if (letterAudio) { letterAudio.pause(); letterAudio.currentTime = 0 }
   }
 
   function ttsUrl(text, type = 0) {
@@ -104,45 +103,7 @@ const AudioCtrl = (() => {
     await playUrl(ttsUrl(word, 0))
   }
 
-  let spellId = 0
-
-  // G 和 P 是有道返回的 WAV 格式，其余是 MP3
-  const letterExt = {G:'wav',P:'wav'}
-  // 移动端需要在用户手势期间创建 Audio 才能播，用懒初始化
-  let letterAudio = null
-  function ensureLetterAudio() {
-    if (!letterAudio) {
-      letterAudio = document.createElement('audio')
-      letterAudio.setAttribute('playsinline', '')
-      letterAudio.preload = 'auto'
-    }
-    return letterAudio
-  }
-
-  async function spellWord(word) {
-    stop()
-    const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
-    const sid = ++spellId
-    const audio = ensureLetterAudio()
-
-    for (const ch of letters) {
-      if (sid !== spellId) return
-      const ext = letterExt[ch] || 'mp3'
-      await new Promise(resolve => {
-        audio.src = 'audio/' + ch + '.' + ext
-        currentAudio = audio
-        audio.onended = () => resolve()
-        audio.onerror = () => resolve()
-        audio.load()
-        audio.play().then(() => {}).catch(() => resolve())
-      })
-    }
-    currentAudio = null
-    if (sid !== spellId) return
-    await playUrl(ttsUrl(word, 0))
-  }
-
-  return { readWord, spellWord, stop }
+  return { readWord, stop }
 })()
 
 // ========== 单词数据 ==========
@@ -202,11 +163,7 @@ function buildWordList(unit) {
   el.id = 'words-' + unit.id;
   el.innerHTML = unit.words.map((w, i) => `
     <div class="word-row" data-unit="${unit.id}" data-idx="${i}"
-         ontouchstart="onDown(event,'${unit.id}',${i})"
-         ontouchend="onUp(event,'${unit.id}',${i})"
-         ontouchmove="cancelTap()"
-         onmousedown="onDown(event,'${unit.id}',${i})"
-         onmouseup="onUp(event,'${unit.id}',${i})">
+         onclick="playWord('${unit.id}',${i})">
       <div class="word-info">
         <div class="word-text">${w.t}</div>
         ${w.c ? `<div class="word-trans">${w.c}</div>` : ''}
@@ -229,50 +186,12 @@ function openUnit(unitId) {
     const el = document.getElementById('words-' + u.id);
     if (el) el.style.display = u.id == unitId ? '' : 'none';
   });
-  const unit = UNITS.find(u => u.id == unitId)
-  $('word-hint').textContent = unit && unit.id === 'letters'
-    ? '点一下听发音'
-    : '点一下听发音 · 长按听拼读'
 }
 
 let playingRow = null
-let tapTimer = null
-let tapFired = false
-let tapStartY = 0
-let tapStartX = 0
-
-function onDown(e, unitId, idx) {
-  tapFired = false
-  cancelTap()
-  // 记录起始坐标用于防误触
-  tapStartX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX
-  tapStartY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY
-  // 在用户手势内激活音频引擎（移动端必须）
-  const a = ensureLetterAudio()
-  a.src = 'audio/A.mp3'; a.load()
-  a.play().then(() => { a.pause(); a.currentTime = 0 }).catch(() => {})
-  tapTimer = setTimeout(() => {
-    tapFired = true
-    playWord(unitId, idx, 'spell')
-  }, 500)
-}
-
-function onUp(e, unitId, idx) {
-  cancelTap()
-  // 防误触：滑动超过 10px 不算点击
-  const endX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : e.clientX
-  const endY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY
-  if (Math.abs(endX - tapStartX) > 10 || Math.abs(endY - tapStartY) > 10) return
-  if (!tapFired) playWord(unitId, idx, 'read')
-}
-
-function cancelTap() {
-  if (tapTimer) { clearTimeout(tapTimer); tapTimer = null }
-}
-
 let playToken = 0
 
-async function playWord(unitId, idx, mode) {
+async function playWord(unitId, idx) {
   const unit = UNITS.find(u => u.id == unitId)
   if (!unit) return
   const word = unit.words[idx]
@@ -282,18 +201,12 @@ async function playWord(unitId, idx, mode) {
   const row = document.querySelector(`.word-row[data-unit="${unitId}"][data-idx="${idx}"]`)
   const token = ++playToken
 
-  // 切换高亮
   if (playingRow && playingRow !== row) playingRow.classList.remove('playing')
   playingRow = row
   if (row) row.classList.add('playing')
 
-  if (mode === 'spell') {
-    await AudioCtrl.spellWord(text)
-  } else {
-    await AudioCtrl.readWord(text)
-  }
+  await AudioCtrl.readWord(text)
 
-  // 只有当前会话才清除高亮，防止旧会话误删
   if (token === playToken && row) {
     row.classList.remove('playing')
     if (playingRow === row) playingRow = null
