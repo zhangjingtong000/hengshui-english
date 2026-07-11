@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <script>
-// ========== 音频管理器 — 有道词典 TTS（真人发音）==========
+// ========== 音频管理器 — 有道 TTS + 26字母预缓存 ==========
 const AudioCtrl = (() => {
   let currentAudio = null
   let currentPlayId = 0
@@ -77,24 +77,9 @@ const AudioCtrl = (() => {
     }
   }
 
-  // 有道 TTS：type=0 美音
   function ttsUrl(text, type = 0) {
     return 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=' + type
   }
-
-  // 预缓存 26 个字母的音频（首次加载后秒播）
-  const letterCache = {}
-  function preloadLetters() {
-    for (let i = 65; i <= 90; i++) {
-      const ch = String.fromCharCode(i)
-      const url = ttsUrl(ch, 0)
-      const audio = new Audio(url)
-      audio.preload = 'auto'
-      audio.load()
-      letterCache[ch] = url
-    }
-  }
-  preloadLetters()
 
   function playUrl(url) {
     stop()
@@ -112,10 +97,36 @@ const AudioCtrl = (() => {
     await playUrl(ttsUrl(word, 0))
   }
 
+  // 选一个固定的英语语音，确保所有字母音色统一
+  let letterVoice = null
+  function ensureVoice() {
+    if (letterVoice) return
+    const voices = speechSynthesis.getVoices()
+    letterVoice = voices.find(v => v.lang === 'en-US' && v.localService)
+               || voices.find(v => v.lang.startsWith('en'))
+  }
+  speechSynthesis.onvoiceschanged = ensureVoice
+  ensureVoice()
+
+  function speakLetter(ch) {
+    const synth = window.speechSynthesis
+    synth.cancel()
+    ensureVoice()
+    const pid = ++currentPlayId
+    return new Promise(resolve => {
+      const u = new SpeechSynthesisUtterance(ch)
+      u.lang = 'en-US'; u.rate = 0.85; u.volume = 1
+      if (letterVoice) u.voice = letterVoice
+      u.onend = () => { if (currentPlayId === pid) resolve() }
+      u.onerror = () => { if (currentPlayId === pid) resolve() }
+      synth.speak(u)
+    })
+  }
+
   async function spellWord(word) {
     const letters = word.split('').filter(c => /[a-zA-Z]/.test(c))
     for (const ch of letters) {
-      await playUrl(letterCache[ch] || ttsUrl(ch, 0))
+      await speakLetter(ch)
     }
     await playUrl(ttsUrl(word, 0))
   }
