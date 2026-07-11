@@ -288,7 +288,12 @@ async function playWord(unitId, idx, mode) {
 // }
 
 // ========== 启动 ==========
-buildUnitList();
+buildUnitList()
+// 预热语音引擎，避免首次拼读卡顿
+setTimeout(() => {
+  const w = new SpeechSynthesisUtterance('')
+  w.volume = 0; speechSynthesis.speak(w)
+}, 500);
 </script>
 </body>
 </html>
