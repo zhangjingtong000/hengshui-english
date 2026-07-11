@@ -114,20 +114,9 @@ const AudioCtrl = (() => {
     await playUrl(ttsUrl(word, 0))
   }
 
-  // 检测是否有英语语音（手机可能没有）
-  let hasEnVoice = null
-  function checkEnVoice() {
-    if (hasEnVoice !== null) return
-    const voices = speechSynthesis.getVoices()
-    hasEnVoice = voices.some(v => v.lang.startsWith('en'))
-  }
-  speechSynthesis.onvoiceschanged = checkEnVoice
-  setTimeout(checkEnVoice, 2000)
-
   function readLetter(ch) {
-    // 使用开源真人录制的字母音频，清晰干脆
     stop()
-    playUrl('audio/' + ch + '.m4a')
+    playUrl('audio/' + ch + '.mp3')
   }
 
   return { readWord, readLetter, stop }
