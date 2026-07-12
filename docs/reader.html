@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>课文点读</title>
+<style>
+:root{--blue:#1E3A5F}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,Helvetica,sans-serif;background:#E2E8F0;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.toolbar{position:sticky;top:0;background:#fff;padding:8px 16px;display:flex;gap:8px;align-items:center;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,.1);flex-wrap:wrap}
+.toolbar select{padding:6px 10px;border-radius:8px;border:1px solid #CBD5E1;font-size:14px;min-width:80px}
+.toolbar button{padding:6px 14px;border-radius:8px;border:1px solid #CBD5E1;background:#fff;font-size:13px;cursor:pointer}
+.toolbar button:active{background:#EBF5FB}
+.page-info{font-size:13px;color:#64748B}
+.canvas-wrap{position:relative;max-width:100%;overflow:auto;text-align:center}
+canvas{display:block;margin:0 auto}
+.page-nav{position:sticky;bottom:0;background:#fff;padding:10px;display:flex;justify-content:center;gap:12px;align-items:center;box-shadow:0 -1px 4px rgba(0,0,0,.1);z-index:10}
+.page-nav button{width:48px;height:48px;border-radius:50%;border:2px solid var(--blue);background:#fff;font-size:22px;color:var(--blue);cursor:pointer}
+.page-nav button:active{background:#DBEAFE}
+.page-nav .pg-label{font-size:15px;font-weight:600;color:var(--blue)}
+/* sentence popup */
+.sentence-popup{position:fixed;bottom:80px;left:16px;right:16px;background:rgba(30,58,95,.95);color:#fff;padding:14px 18px;border-radius:14px;font-size:18px;text-align:center;z-index:20;display:none;pointer-events:none}
+.sentence-popup.show{display:block}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <select id="unitSelect" onchange="loadUnit()">
+    <option value="1">Unit 1</option>
+    <option value="2">Unit 2</option>
+    <option value="3">Unit 3</option>
+    <option value="4">Unit 4</option>
+    <option value="5">Unit 5</option>
+    <option value="6">Unit 6</option>
+    <option value="7">Unit 7</option>
+    <option value="8">Unit 8</option>
+  </select>
+  <button onclick="playFullAudio()">🔊 全文朗读</button>
+  <span class="page-info" id="pageInfo"></span>
+</div>
+<div class="canvas-wrap" id="canvasWrap">
+  <canvas id="canvas"></canvas>
+</div>
+<div class="sentence-popup" id="popup"></div>
+<div class="page-nav">
+  <button onclick="prevPage()">‹</button>
+  <span class="pg-label" id="pageLabel">1</span>
+  <button onclick="nextPage()">›</button>
+</div>
+
+<script>
+// ========== Load data ==========
+let annotations = []
+let currentPage = 0
+let pages = []
+let currentAudio = null
+let currentUnit = 1
+let img = null
+let canvas = document.getElementById('canvas')
+let ctx = canvas.getContext('2d')
+
+async function loadAnnotations() {
+  // Load from the user's downloaded file or localStorage
+  const saved = localStorage.getItem('annotations')
+  if (saved) {
+    annotations = JSON.parse(saved)
+    console.log('Loaded', annotations.length, 'annotations from localStorage')
+  }
+  // Also try to load from file
+  try {
+    const resp = await fetch('annotations.json')
+    if (resp.ok) {
+      annotations = await resp.json()
+      localStorage.setItem('annotations', JSON.stringify(annotations))
+      console.log('Loaded', annotations.length, 'annotations from file')
+    }
+  } catch(e) {}
+}
+
+function loadUnit() {
+  currentUnit = parseInt(document.getElementById('unitSelect').value)
+  // Filter annotations for this unit
+  const unitAnnotations = annotations.filter(a => {
+    const u = a.audio.match(/Unit_(\d+)/)
+    return u && parseInt(u[1]) === currentUnit
+  })
+  pages = [...new Set(unitAnnotations.map(a => a.page))].sort((a,b) => a-b)
+  if (pages.length > 0) {
+    currentPage = pages[0]
+    loadPage()
+  } else {
+    document.getElementById('pageLabel').textContent = '?'
+    alert('Unit ' + currentUnit + ' 暂无标注数据，请先标注后导出 JSON 放到 pwa 目录下')
+  }
+}
+
+function loadPage() {
+  const padded = String(currentPage).padStart(2, '0')
+  img = new Image()
+  img.onload = () => drawPage()
+  img.src = 'pages/page_' + padded + '.png'
+  document.getElementById('pageLabel').textContent = '第 ' + currentPage + ' 页'
+  document.getElementById('pageInfo').textContent = 'Unit ' + currentUnit + ' | 页码 ' + currentPage
+}
+
+function drawPage() {
+  if (!img) return
+  const maxW = Math.min(window.innerWidth - 32, 800)
+  const scale = maxW / img.width
+  canvas.width = maxW
+  canvas.height = img.height * scale
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+  // Draw clickable regions
+  const pageAnnotations = annotations.filter(a => a.page === currentPage)
+  pageAnnotations.forEach(ann => {
+    const x = ann.x * scale, y = ann.y * scale, w = ann.w * scale, h = ann.h * scale
+    const isFull = ann.type === 'full'
+
+    // Subtle overlay
+    ctx.fillStyle = isFull ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.08)'
+    ctx.fillRect(x, y, w, h)
+    ctx.strokeStyle = isFull ? 'rgba(34,197,94,0.5)' : 'rgba(59,130,246,0.3)'
+    ctx.lineWidth = isFull ? 2 : 1
+    ctx.strokeRect(x, y, w, h)
+
+    if (isFull) {
+      ctx.fillStyle = 'rgba(34,197,94,0.9)'
+      ctx.font = `bold ${Math.max(14, 18*scale)}px Arial`
+      ctx.fillText('🔊 全文朗读', x + 6, y + Math.max(20, 24*scale))
+    }
+  })
+}
+
+// Handle taps
+canvas.addEventListener('click', function(e) {
+  if (!img) return
+  const rect = canvas.getBoundingClientRect()
+  const scale = canvas.width / img.width
+  const mx = (e.clientX - rect.left) / scale
+  const my = (e.clientY - rect.top) / scale
+
+  const hit = annotations.find(a =>
+    a.page === currentPage &&
+    mx >= a.x && mx <= a.x + a.w &&
+    my >= a.y && my <= a.y + a.h
+  )
+  if (!hit) return
+
+  stopAudio()
+  if (hit.type === 'full') {
+    playAudio(hit.audio, 0, Infinity)
+    showPopup('🔊 全文朗读 — ' + hit.audio.replace(/_/g,' ').replace('.mp3',''))
+  } else {
+    playAudio(hit.audio, hit.start, hit.end)
+    showPopup(hit.text)
+  }
+})
+
+function playAudio(filename, start, end) {
+  const audio = new Audio('audio/' + filename)
+  audio.currentTime = start
+  currentAudio = audio
+  audio.play().catch(() => {})
+  if (end < Infinity) {
+    const check = setInterval(() => {
+      if (audio.currentTime >= end) { audio.pause(); clearInterval(check) }
+    }, 100)
+    audio.onended = () => clearInterval(check)
+  }
+  audio.onended = () => { currentAudio = null; hidePopup() }
+}
+
+function stopAudio() {
+  if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; currentAudio = null }
+}
+
+function playFullAudio() {
+  const fullAnn = annotations.find(a => a.page === currentPage && a.type === 'full')
+  if (fullAnn) {
+    stopAudio()
+    playAudio(fullAnn.audio, 0, Infinity)
+    showPopup('🔊 全文朗读')
+  }
+}
+
+function showPopup(text) {
+  const popup = document.getElementById('popup')
+  popup.textContent = text
+  popup.classList.add('show')
+  clearTimeout(popup._timer)
+  popup._timer = setTimeout(() => popup.classList.remove('show'), 3000)
+}
+function hidePopup() {
+  document.getElementById('popup').classList.remove('show')
+}
+
+function prevPage() {
+  const idx = pages.indexOf(currentPage)
+  if (idx > 0) { currentPage = pages[idx-1]; loadPage() }
+}
+function nextPage() {
+  const idx = pages.indexOf(currentPage)
+  if (idx < pages.length-1) { currentPage = pages[idx+1]; loadPage() }
+}
+
+window.addEventListener('resize', drawPage)
+
+// Start
+loadAnnotations().then(() => {
+  if (annotations.length > 0) loadUnit()
+})
+</script>
+</body>
+</html>
